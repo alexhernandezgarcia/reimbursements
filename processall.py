@@ -14,6 +14,9 @@ from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 
 def add_args(parser):
     """
@@ -49,6 +52,7 @@ def print_args(args):
 
 
 def process_item(
+    basedir: str,
     name: str,
     date: str,
     description: str,
@@ -58,12 +62,12 @@ def process_item(
     comments: str = None,
 ):
     # Write markdown file
-    markdown = Path(f"{name}.md")
-    pdf = Path(f"{name}.pdf")
+    markdown = Path(basedir) / f"{name}.md"
+    pdf = Path(basedir) / f"{name}.pdf"
     if markdown.exists():
         now = str(int(datetime.now().timestamp()))
-        markdown = Path(f"{name}_{now}.md")
-        pdf = Path(f"{name}_{now}.pdf")
+        markdown = Path(basedir) / f"{name}_{now}.md"
+        pdf = Path(basedir) / f"{name}_{now}.pdf"
     if pdf.exists():
         raise RuntimeError(f"File {pdf.name} exists!")
     with open(markdown, "w") as f:
@@ -85,7 +89,18 @@ def process_item(
             f.write(f"- Commentaires : {comments}\n")
 
     # Convert markdown file to PDF
-    os.system(f"pandoc {markdown.name} -o {pdf.name}")
+    os.system(f"pandoc {str(markdown.absolute())} -o {str(pdf.absolute())}")
+
+
+def process_section(basedir: str, name: str):
+    # Read CSV of section
+    basedir = Path(basedir) / name
+    df = pd.read_csv(basedir / f"{name}.csv", index_col=False)
+    # Replace empty strings and NaN with None
+    df = df.replace({"": None, np.nan: None})
+    # Process each row (expense item) of the CSV
+    for row in df.iterrows():
+        process_item(basedir, **row[1].to_dict())
 
 
 def main(args):
@@ -107,16 +122,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
 
-    ### DEBUG ###
-    process_item(
-        name="hotel",
-        date="20/03/2026",
-        description="Hotel Lagune Barra - Rio de Janeiro",
-        n_receipts=1,
-        cad=6579.30,
-        other_currency="17.89 JPY",
-        comments=None,
-    )
-    ### DEBUG ###
+    # Process accommodation
+    process_section(args.dir, "accommodation")
+    # Process transport
+    process_section(args.dir, "transport")
+    # Process misc
+    process_section(args.dir, "misc")
 
     sys.exit()
