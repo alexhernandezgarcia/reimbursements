@@ -1,0 +1,4 @@
+name,date,description,n_receipts,cad,other_currency,comments
+train_home_city_a,31/11/2002,Train to City A,1,123.45,,
+bus_city_a_city_b,31/11/2002,Bus from City A to City B,1,77.13,,
+train_city_b_home,07/12/2002,Train from City B back home,1,127.98,,
