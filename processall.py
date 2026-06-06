@@ -32,6 +32,13 @@ def add_args(parser):
         "files with the expenses.",
         required=True,
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        type=int,
+        default=0,
+        help="Level of verbosity, the higher the more verbose.",
+    )
     return parser
 
 
@@ -92,14 +99,19 @@ def process_item(
     os.system(f"pandoc {str(markdown.absolute())} -o {str(pdf.absolute())}")
 
 
-def process_section(basedir: str, name: str):
+def process_section(basedir: str, name: str, verbose: int = 0):
     # Read CSV of section
     basedir = Path(basedir) / name
-    df = pd.read_csv(basedir / f"{name}.csv", index_col=False)
+    csv = basedir / f"{name}.csv"
+    df = pd.read_csv(csv, index_col=False)
     # Replace empty strings and NaN with None
     df = df.replace({"": None, np.nan: None})
+    if verbose > 0:
+        print(f"Processing {name} from {str(csv.absolute())}")
     # Process each row (expense item) of the CSV
     for row in df.iterrows():
+        if verbose > 1:
+            print(f"\tProcessing {row[1].description}")
         process_item(basedir, **row[1].to_dict())
 
 
@@ -112,7 +124,15 @@ def main(args):
     args : argparse.Namespace
         The parsed arguments
     """
-    print_args(args)
+    if args.verbose > 0:
+        print_args(args)
+
+    # Process accommodation
+    process_section(args.dir, "accommodation", args.verbose)
+    # Process transport
+    process_section(args.dir, "transport", args.verbose)
+    # Process misc
+    process_section(args.dir, "misc", args.verbose)
 
 
 if __name__ == "__main__":
@@ -121,12 +141,4 @@ if __name__ == "__main__":
     parser = add_args(parser)
     args = parser.parse_args()
     main(args)
-
-    # Process accommodation
-    process_section(args.dir, "accommodation")
-    # Process transport
-    process_section(args.dir, "transport")
-    # Process misc
-    process_section(args.dir, "misc")
-
     sys.exit()
