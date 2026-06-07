@@ -77,11 +77,26 @@ def process_item(
     other_currency: float = None,
     comments: str = None,
 ):
-    # Find payment PNG file related to the item being processed
-    card_png = Path(basedir).glob(f"{name}*_card.png")
-
     # Find PDF files related to the item being processed
-    pdfs_item = Path(basedir).glob(f"{name}.pdf")
+    pdfs_item = Path(basedir).glob(f"{name}*.pdf")
+
+    # Find payment PDF file related to the item being processed
+    card_pdf = [el for el in Path(basedir).glob(f"{name}*_card.pdf")]
+    # If no PDF file is find, search PNG file
+    if len(card_pdf) == 0:
+        card_png = [el for el in Path(basedir).glob(f"{name}*_card.png")]
+        if len(card_png) == 0:
+            raise RuntimeError(f"No card payment file found for item {name}!")
+        if len(card_png) > 1:
+            raise RuntimeError(f"Multiple card payment files found for item {name}!")
+        # Convert PNG file to PDF
+        card_png = card_png[0]
+        card_pdf = card_png.with_suffix(".pdf")
+        os.system(f"convert {str(card_png.absolute())} {str(card_pdf.absolute())}")
+    else:
+        if len(card_pdf) > 1:
+            raise RuntimeError(f"Multiple card payment files found for item {name}!")
+        card_pdf = card_pdf[0]
 
     # Create markdown file with summary information
     markdown = Path(basedir) / f"{name}.md"
@@ -109,14 +124,16 @@ def process_item(
         f.write(f"- Nombre de reçus : {n_receipts}\n")
         if comments:
             f.write(f"- Commentaires : {comments}\n")
-
     # Convert markdown file to PDF
     os.system(f"pandoc {str(markdown.absolute())} -o {str(pdf.absolute())}")
+
+    # Concatenate all PDFs related to the item being processed
 
     # Clean up files
     if not keeptmp:
         markdown.unlink()
         pdf.unlink()
+        card_pdf.unlink()
 
 
 def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int = 0):
