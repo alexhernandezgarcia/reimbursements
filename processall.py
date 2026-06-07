@@ -5,7 +5,8 @@ PDF with the necessary information.
 Example:
 
     python processall.py \
-            --dir path/to/directory/
+            --dir sampledir/ \
+            --verbose 2 \
 """
 
 import os
@@ -36,7 +37,7 @@ def add_args(parser):
         "--verbose",
         "-v",
         type=int,
-        default=0,
+        default=1,
         help="Level of verbosity, the higher the more verbose.",
     )
     return parser
