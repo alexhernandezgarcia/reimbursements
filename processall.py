@@ -40,6 +40,13 @@ def add_args(parser):
         default=1,
         help="Level of verbosity, the higher the more verbose.",
     )
+    parser.add_argument(
+        "--keeptmp",
+        default=False,
+        action="store_true",
+        help="If used, the auxiliary files generated during the programme execution"
+        "are not deleted.",
+    )
     return parser
 
 
@@ -61,6 +68,7 @@ def print_args(args):
 
 def process_item(
     basedir: str,
+    keeptmp: bool,
     name: str,
     date: str,
     description: str,
@@ -69,7 +77,13 @@ def process_item(
     other_currency: float = None,
     comments: str = None,
 ):
-    # Write markdown file
+    # Find payment PNG file related to the item being processed
+    card_png = Path(basedir).glob(f"{name}*_card.png")
+
+    # Find PDF files related to the item being processed
+    pdfs_item = Path(basedir).glob(f"{name}.pdf")
+
+    # Create markdown file with summary information
     markdown = Path(basedir) / f"{name}.md"
     pdf = Path(basedir) / f"{name}.pdf"
     if markdown.exists():
@@ -99,8 +113,13 @@ def process_item(
     # Convert markdown file to PDF
     os.system(f"pandoc {str(markdown.absolute())} -o {str(pdf.absolute())}")
 
+    # Clean up files
+    if not keeptmp:
+        markdown.unlink()
+        pdf.unlink()
 
-def process_section(basedir: str, name: str, verbose: int = 0):
+
+def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int = 0):
     # Read CSV of section
     basedir = Path(basedir) / name
     csv = basedir / f"{name}.csv"
@@ -113,7 +132,7 @@ def process_section(basedir: str, name: str, verbose: int = 0):
     for row in df.iterrows():
         if verbose > 1:
             print(f"\tProcessing {row[1].description}")
-        process_item(basedir, **row[1].to_dict())
+        process_item(basedir, keeptmp, **row[1].to_dict())
 
 
 def main(args):
@@ -129,11 +148,11 @@ def main(args):
         print_args(args)
 
     # Process accommodation
-    process_section(args.dir, "accommodation", args.verbose)
+    process_section(args.dir, "accommodation", args.keeptmp, args.verbose)
     # Process transport
-    process_section(args.dir, "transport", args.verbose)
+    process_section(args.dir, "transport", args.keeptmp, args.verbose)
     # Process misc
-    process_section(args.dir, "misc", args.verbose)
+    process_section(args.dir, "misc", args.keeptmp, args.verbose)
 
 
 if __name__ == "__main__":
