@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pypdf import PdfReader, PdfWriter
 
 
 def add_args(parser):
@@ -69,6 +70,7 @@ def print_args(args):
 def process_item(
     basedir: str,
     keeptmp: bool,
+    verbose: int,
     name: str,
     date: str,
     description: str,
@@ -78,36 +80,38 @@ def process_item(
     comments: str = None,
 ):
     # Find PDF files related to the item being processed
-    pdfs_item = Path(basedir).glob(f"{name}*.pdf")
+    pdfs_item = [el for el in Path(basedir).glob(f"{name}*.pdf")]
 
     # Find payment PDF file related to the item being processed
-    card_pdf = [el for el in Path(basedir).glob(f"{name}*_card.pdf")]
+    pdf_card = [el for el in Path(basedir).glob(f"{name}*_card.pdf")]
     # If no PDF file is find, search PNG file
-    if len(card_pdf) == 0:
-        card_png = [el for el in Path(basedir).glob(f"{name}*_card.png")]
-        if len(card_png) == 0:
+    if len(pdf_card) == 0:
+        png_card = [el for el in Path(basedir).glob(f"{name}*_card.png")]
+        if len(png_card) == 0:
             raise RuntimeError(f"No card payment file found for item {name}!")
-        if len(card_png) > 1:
+        if len(png_card) > 1:
             raise RuntimeError(f"Multiple card payment files found for item {name}!")
         # Convert PNG file to PDF
-        card_png = card_png[0]
-        card_pdf = card_png.with_suffix(".pdf")
-        os.system(f"convert {str(card_png.absolute())} {str(card_pdf.absolute())}")
+        png_card = png_card[0]
+        pdf_card = png_card.with_suffix(".pdf")
+        os.system(f"convert {str(png_card.absolute())} {str(pdf_card.absolute())}")
+        if verbose > 2:
+            print(f"\t\tCreated {str(pdf_card.absolute())} from PNG")
     else:
-        if len(card_pdf) > 1:
+        if len(pdf_card) > 1:
             raise RuntimeError(f"Multiple card payment files found for item {name}!")
-        card_pdf = card_pdf[0]
+        pdf_card = pdf_card[0]
 
     # Create markdown file with summary information
-    markdown = Path(basedir) / f"{name}.md"
-    pdf = Path(basedir) / f"{name}.pdf"
-    if markdown.exists():
+    markdown_summary = Path(basedir) / f"{name}.md"
+    pdf_summary = Path(basedir) / f"{name}.pdf"
+    if markdown_summary.exists():
         now = str(int(datetime.now().timestamp()))
-        markdown = Path(basedir) / f"{name}_{now}.md"
-        pdf = Path(basedir) / f"{name}_{now}.pdf"
-    if pdf.exists():
-        raise RuntimeError(f"File {pdf.name} exists!")
-    with open(markdown, "w") as f:
+        markdown_summary = Path(basedir) / f"{name}_{now}.md"
+        pdf_summary = Path(basedir) / f"{name}_{now}.pdf"
+    if pdf_summary.exists():
+        raise RuntimeError(f"File {pdf_summary.name} exists!")
+    with open(markdown_summary, "w") as f:
         f.write("---\n")
         f.write("header-includes:\n")
         f.write("- \\pagenumbering{gobble}\n")
@@ -125,15 +129,33 @@ def process_item(
         if comments:
             f.write(f"- Commentaires : {comments}\n")
     # Convert markdown file to PDF
-    os.system(f"pandoc {str(markdown.absolute())} -o {str(pdf.absolute())}")
+    os.system(
+        f"pandoc {str(markdown_summary.absolute())} -o {str(pdf_summary.absolute())}"
+    )
+    if verbose > 2:
+        print(f"\t\tCreated {str(pdf_summary.absolute())} as a summary page")
 
     # Concatenate all PDFs related to the item being processed
+    pdf_merger = PdfWriter()
+    pdf_merger.append(pdf_summary)
+    pdf_merger.append(pdf_card)
+    for pdf in pdfs_item:
+        if verbose > 2:
+            print(f"\t\tAdding {str(pdf.absolute())} to merged PDF")
+        pdf_merger.append(pdf)
+    now = str(int(datetime.now().timestamp()))
+    output = Path(basedir) / f"output_{name}_{now}.pdf"
+    pdf_merger.write(output)
 
     # Clean up files
     if not keeptmp:
-        markdown.unlink()
-        pdf.unlink()
-        card_pdf.unlink()
+        if verbose > 2:
+            print(f"\t\tDeleting auxiliary files...")
+        markdown_summary.unlink()
+        pdf_summary.unlink()
+        pdf_card.unlink()
+
+    return output
 
 
 def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int = 0):
@@ -145,11 +167,24 @@ def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int
     df = df.replace({"": None, np.nan: None})
     if verbose > 0:
         print(f"Processing {name} from {str(csv.absolute())}")
+
     # Process each row (expense item) of the CSV
+    pdf_merger = PdfWriter()
     for row in df.iterrows():
         if verbose > 1:
             print(f"\tProcessing {row[1].description}")
-        process_item(basedir, keeptmp, **row[1].to_dict())
+        pdf = process_item(basedir, keeptmp, verbose, **row[1].to_dict())
+        pdf_merger.append(pdf)
+        if not keeptmp:
+            pdf.unlink()
+
+    now = str(int(datetime.now().timestamp()))
+    output = Path(basedir) / f"{name}_{now}.pdf"
+    pdf_merger.write(output)
+    if verbose > 2:
+        print(f"\t\tCreated {str(output.absolute())} with {name} contents")
+
+    return output
 
 
 def main(args):
@@ -164,12 +199,31 @@ def main(args):
     if args.verbose > 0:
         print_args(args)
 
+    pdf_merger = PdfWriter()
+
     # Process accommodation
-    process_section(args.dir, "accommodation", args.keeptmp, args.verbose)
+    pdf_accommodation = process_section(
+        args.dir, "accommodation", args.keeptmp, args.verbose
+    )
+    pdf_merger.append(pdf_accommodation)
+    if not args.keeptmp:
+        pdf_accommodation.unlink()
     # Process transport
-    process_section(args.dir, "transport", args.keeptmp, args.verbose)
+    pdf_transport = process_section(args.dir, "transport", args.keeptmp, args.verbose)
+    pdf_merger.append(pdf_transport)
+    if not args.keeptmp:
+        pdf_transport.unlink()
     # Process misc
-    process_section(args.dir, "misc", args.keeptmp, args.verbose)
+    pdf_misc = process_section(args.dir, "misc", args.keeptmp, args.verbose)
+    pdf_merger.append(pdf_misc)
+    if not args.keeptmp:
+        pdf_misc.unlink()
+
+    # Write final PDF
+    output = Path(args.dir) / "all_docs.pdf"
+    pdf_merger.write(output)
+    if args.verbose > 0:
+        print(f"\t\tCreated {str(output.absolute())} with all documents")
 
 
 if __name__ == "__main__":
