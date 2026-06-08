@@ -3,9 +3,9 @@ header-includes:
 - \pagenumbering{gobble}
 ---
 
-# Booking of Hotel City A 
+# Booking of Hotel City B 
 
-Dates: 13/12/2002 - 21/12/2002
+Dates: 21/12/2002 - 23/12/2002
 
 ## Nulla sed leo sem
 
