@@ -10,7 +10,9 @@ Example:
 """
 
 import os
+import re
 import sys
+import unicodedata
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
@@ -187,6 +189,52 @@ def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int
     return output
 
 
+def add_toc(basedir: str, filename: str, keeptmp: bool = False, verbose: int = 0):
+
+    def make_id(title):
+        text = unicodedata.normalize("NFKD", title)
+        text = text.encode("ascii", "ignore").decode("ascii")
+        text = text.lower()
+        text = re.sub(r"[^a-z0-9]+", "-", text)
+        text = text.strip("-")
+        return text or "section"
+
+    # Read PDF
+    main = PdfReader(filename)
+
+    # Create markdown file with table of contents
+    now = str(int(datetime.now().timestamp()))
+    markdown_toc = Path(basedir) / f"toc_{now}.md"
+    pdf_toc = Path(basedir) / f"toc_{now}.pdf"
+    with open(markdown_toc, "w") as f:
+        f.write("---\n")
+        f.write("header-includes:\n")
+        f.write("- \\pagenumbering{gobble}\n")
+        f.write("---\n")
+        f.write("\n")
+        f.write(f"# Index de dépenses\n")
+        f.write("\n")
+
+        for outline in main.outline:
+            f.write(f"- [{outline.title}](#{make_id(outline.title)})\n")
+
+    # Convert markdown file to PDF
+    os.system(f"pandoc {str(markdown_toc.absolute())} -o {str(pdf_toc.absolute())}")
+
+    # Concatenate TOC and main PDF
+    pdf_merger = PdfWriter()
+    pdf_merger.append(main, import_outline=True)
+    pdf_merger.merge(position=0, fileobj=pdf_toc, import_outline=False)
+    pdf_merger.write(filename)
+
+    # Clean up files
+    if not keeptmp:
+        if verbose > 2:
+            print(f"\t\tDeleting auxiliary files...")
+        markdown_toc.unlink()
+        pdf_toc.unlink()
+
+
 def main(args):
     """
     Main method of the script.
@@ -226,6 +274,9 @@ def main(args):
     pdf_merger.write(output)
     if args.verbose > 0:
         print(f"\t\tCreated {str(output.absolute())} with all documents")
+
+    # Add table of contents
+    add_toc(args.dir, output, args.keeptmp, args.verbose)
 
 
 if __name__ == "__main__":
