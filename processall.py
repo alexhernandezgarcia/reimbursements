@@ -86,7 +86,7 @@ def process_item(
 
     # Find payment PDF file related to the item being processed
     pdf_card = [el for el in Path(basedir).glob(f"{name}*_card.pdf")]
-    # If no PDF file is find, search PNG file
+    # If no PDF file is found, search PNG file
     if len(pdf_card) == 0:
         png_card = [el for el in Path(basedir).glob(f"{name}*_card.png")]
         if len(png_card) == 0:
@@ -99,18 +99,17 @@ def process_item(
         os.system(f"convert {str(png_card.absolute())} {str(pdf_card.absolute())}")
         if verbose > 2:
             print(f"\t\tCreated {str(pdf_card.absolute())} from PNG")
+        keep_pdf_card = False
     else:
         if len(pdf_card) > 1:
             raise RuntimeError(f"Multiple card payment files found for item {name}!")
+        keep_pdf_card = True
         pdf_card = pdf_card[0]
 
     # Create markdown file with summary information
-    markdown_summary = Path(basedir) / f"{name}.md"
-    pdf_summary = Path(basedir) / f"{name}.pdf"
-    if markdown_summary.exists():
-        now = str(int(datetime.now().timestamp()))
-        markdown_summary = Path(basedir) / f"{name}_{now}.md"
-        pdf_summary = Path(basedir) / f"{name}_{now}.pdf"
+    now = str(int(datetime.now().timestamp()))
+    markdown_summary = Path(basedir) / f"{name}_summary_{now}.md"
+    pdf_summary = Path(basedir) / f"{name}_summary_{now}.pdf"
     if pdf_summary.exists():
         raise RuntimeError(f"File {pdf_summary.name} exists!")
     with open(markdown_summary, "w") as f:
@@ -155,7 +154,8 @@ def process_item(
             print(f"\t\tDeleting auxiliary files...")
         markdown_summary.unlink()
         pdf_summary.unlink()
-        pdf_card.unlink()
+        if not keep_pdf_card:
+            pdf_card.unlink()
 
     return output
 
