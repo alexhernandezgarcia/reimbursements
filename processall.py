@@ -137,12 +137,12 @@ def process_item(
 
     # Concatenate all PDFs related to the item being processed
     pdf_merger = PdfWriter()
-    pdf_merger.append(pdf_summary)
-    pdf_merger.append(pdf_card)
+    pdf_merger.append(pdf_summary, import_outline=False, outline_item=description)
+    pdf_merger.append(pdf_card, import_outline=False)
     for pdf in pdfs_item:
         if verbose > 2:
             print(f"\t\tAdding {str(pdf.absolute())} to merged PDF")
-        pdf_merger.append(pdf)
+        pdf_merger.append(pdf, import_outline=False)
     now = str(int(datetime.now().timestamp()))
     output = Path(basedir) / f"output_{name}_{now}.pdf"
     pdf_merger.write(output)
@@ -174,7 +174,7 @@ def process_section(basedir: str, name: str, keeptmp: bool = False, verbose: int
         if verbose > 1:
             print(f"\tProcessing {row[1].description}")
         pdf = process_item(basedir, keeptmp, verbose, **row[1].to_dict())
-        pdf_merger.append(pdf)
+        pdf_merger.append(pdf, import_outline=True)
         if not keeptmp:
             pdf.unlink()
 
@@ -201,23 +201,40 @@ def main(args):
 
     pdf_merger = PdfWriter()
 
+    # Process transport
+    pdf_transport = process_section(args.dir, "transport", args.keeptmp, args.verbose)
+    n_pages = len(pdf_merger.pages)
+    pdf_merger.append(pdf_transport, import_outline=True)
+    if not args.keeptmp:
+        pdf_transport.unlink()
+    pdf_merger.add_outline_item(
+        title="TRANSPORT",
+        page_number=n_pages,
+    )
+
     # Process accommodation
     pdf_accommodation = process_section(
         args.dir, "accommodation", args.keeptmp, args.verbose
     )
-    pdf_merger.append(pdf_accommodation)
+    n_pages = len(pdf_merger.pages)
+    pdf_merger.append(pdf_accommodation, import_outline=True)
     if not args.keeptmp:
         pdf_accommodation.unlink()
-    # Process transport
-    pdf_transport = process_section(args.dir, "transport", args.keeptmp, args.verbose)
-    pdf_merger.append(pdf_transport)
-    if not args.keeptmp:
-        pdf_transport.unlink()
+    pdf_merger.add_outline_item(
+        title="HÉBERGEMENT",
+        page_number=n_pages,
+    )
+
     # Process misc
     pdf_misc = process_section(args.dir, "misc", args.keeptmp, args.verbose)
-    pdf_merger.append(pdf_misc)
+    n_pages = len(pdf_merger.pages)
+    pdf_merger.append(pdf_misc, import_outline=True)
     if not args.keeptmp:
         pdf_misc.unlink()
+    pdf_merger.add_outline_item(
+        title="DÉPENSES DIVERSES",
+        page_number=n_pages,
+    )
 
     # Write final PDF
     output = Path(args.dir) / "all_docs.pdf"
