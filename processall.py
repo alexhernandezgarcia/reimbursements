@@ -203,38 +203,23 @@ def main(args):
 
     # Process transport
     pdf_transport = process_section(args.dir, "transport", args.keeptmp, args.verbose)
-    n_pages = len(pdf_merger.pages)
     pdf_merger.append(pdf_transport, import_outline=True)
     if not args.keeptmp:
         pdf_transport.unlink()
-    pdf_merger.add_outline_item(
-        title="TRANSPORT",
-        page_number=n_pages,
-    )
 
     # Process accommodation
     pdf_accommodation = process_section(
         args.dir, "accommodation", args.keeptmp, args.verbose
     )
-    n_pages = len(pdf_merger.pages)
     pdf_merger.append(pdf_accommodation, import_outline=True)
     if not args.keeptmp:
         pdf_accommodation.unlink()
-    pdf_merger.add_outline_item(
-        title="HÉBERGEMENT",
-        page_number=n_pages,
-    )
 
     # Process misc
     pdf_misc = process_section(args.dir, "misc", args.keeptmp, args.verbose)
-    n_pages = len(pdf_merger.pages)
     pdf_merger.append(pdf_misc, import_outline=True)
     if not args.keeptmp:
         pdf_misc.unlink()
-    pdf_merger.add_outline_item(
-        title="DÉPENSES DIVERSES",
-        page_number=n_pages,
-    )
 
     # Write final PDF
     output = Path(args.dir) / "all_docs.pdf"
